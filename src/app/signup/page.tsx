@@ -1,0 +1,197 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { Logo } from "@/components/ui/logo";
+
+export default function SignupPage() {
+  const router = useRouter();
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const supabase = createClient();
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    // 1. Sign up user via Supabase Auth
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          phone: phone,
+        },
+      },
+    });
+
+    if (signUpError) {
+      setError(signUpError.message);
+      setLoading(false);
+      return;
+    }
+
+    if (data.user) {
+      // 2. Insert into public profiles table if it doesn't trigger automatically
+      await supabase.from("profiles").upsert({
+        id: data.user.id,
+        full_name: fullName,
+        phone: phone,
+        email: email,
+        updated_at: new Date().toISOString(),
+      });
+
+      router.push("/account");
+      router.refresh();
+    }
+  };
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-16">
+      <div className="w-full max-w-md bg-white rounded-3xl p-8 sm:p-10 shadow-xl border border-navy/5">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <Logo size="lg" />
+          </div>
+          <h1 className="font-display text-3xl font-extrabold text-navy tracking-tight">
+            Join the circle.
+          </h1>
+          <p className="text-navy-60 text-sm mt-2 font-handwritten text-lg text-pink font-bold">
+            You&apos;re officially unofficial.
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 rounded-xl bg-pink/10 border border-pink/20 text-pink text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSignup} className="flex flex-col gap-4">
+          <div>
+            <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
+              Full Name
+            </label>
+            <input
+              type="text"
+              required
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Your name"
+              className="w-full px-4 py-3 rounded-xl border border-navy/15 text-sm focus:outline-none focus:border-navy"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
+              Email Address
+            </label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@example.com"
+              className="w-full px-4 py-3 rounded-xl border border-navy/15 text-sm focus:outline-none focus:border-navy"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
+              Phone Number
+            </label>
+            <input
+              type="tel"
+              required
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+91 98765 43210"
+              className="w-full px-4 py-3 rounded-xl border border-navy/15 text-sm focus:outline-none focus:border-navy"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
+              Password
+            </label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              minLength={6}
+              className="w-full px-4 py-3 rounded-xl border border-navy/15 text-sm focus:outline-none focus:border-navy"
+            />
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3">
+            <h3 className="font-display text-sm font-bold text-navy uppercase tracking-wider mb-2">
+              Member Confirmation
+            </h3>
+            
+            <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
+              <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
+              <span>I am 18 years or older.</span>
+            </label>
+            
+            <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
+              <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
+              <span>The information provided by me is accurate.</span>
+            </label>
+            
+            <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
+              <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
+              <span>I have read and agree to these <Link href="/terms" target="_blank" className="text-pink hover:underline">Terms & Conditions</Link>.</span>
+            </label>
+            
+            <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
+              <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
+              <span>I agree to follow the Community Code of Conduct.</span>
+            </label>
+            
+            <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
+              <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
+              <span>I understand that individual events may have additional rules and consent requirements.</span>
+            </label>
+            
+            <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
+              <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
+              <span>I have read the <Link href="/privacy" target="_blank" className="text-pink hover:underline">Privacy Policy</Link>.</span>
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-4 py-3.5 px-4 rounded-full bg-navy text-cream font-display text-sm font-bold uppercase tracking-wider hover:bg-blue transition-all disabled:opacity-50"
+          >
+            {loading ? "Joining..." : "Join the Circle"}
+          </button>
+        </form>
+
+        <div className="mt-8 text-center">
+          <p className="text-xs text-navy-60">
+            Already have an account?{" "}
+            <Link
+              href="/login"
+              className="font-bold text-navy hover:text-pink transition-colors"
+            >
+              Log in →
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
