@@ -14,46 +14,104 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   const supabase = createClient();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[signup] form submitted");
     setLoading(true);
     setError(null);
 
-    // 1. Sign up user via Supabase Auth
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          phone: phone,
+    try {
+      console.log("[signup] calling supabase.auth.signUp for", email);
+      // 1. Sign up user via Supabase Auth
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            phone: phone,
+          },
         },
-      },
-    });
-
-    if (signUpError) {
-      setError(signUpError.message);
-      setLoading(false);
-      return;
-    }
-
-    if (data.user) {
-      // 2. Insert into public profiles table if it doesn't trigger automatically
-      await supabase.from("profiles").upsert({
-        id: data.user.id,
-        full_name: fullName,
-        phone: phone,
-        email: email,
-        updated_at: new Date().toISOString(),
       });
 
-      router.push("/account");
-      router.refresh();
+      console.log("[signup] signUp result:", { data, error: signUpError });
+
+      if (signUpError) {
+        console.error("[signup] signUp error:", signUpError);
+        setError(signUpError.message);
+        setLoading(false);
+        return;
+      }
+
+      if (data.user) {
+        console.log("[signup] user created, session:", !!data.session);
+        // If a session exists the user is auto-confirmed → go straight to account.
+        // If there's no session, Supabase requires email confirmation first.
+        if (data.session) {
+          console.log("[signup] auto-confirmed, upserting profile...");
+          // 2. Insert into public profiles table
+          const { error: upsertError } = await supabase.from("profiles").upsert({
+            id: data.user.id,
+            full_name: fullName,
+            phone: phone,
+            email: email,
+            updated_at: new Date().toISOString(),
+          });
+          if (upsertError) console.warn("[signup] profile upsert error:", upsertError);
+
+          router.push("/account");
+          router.refresh();
+        } else {
+          console.log("[signup] email confirmation required");
+          // Email confirmation required — show a friendly message.
+          setAwaitingConfirmation(true);
+          setLoading(false);
+        }
+      } else {
+        console.warn("[signup] no user returned");
+        setError("Something went wrong. Please try again.");
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error("[signup] unexpected exception:", err);
+      setError("An unexpected error occurred. Please try again.");
+      setLoading(false);
     }
   };
+
+  // Show email confirmation screen if Supabase requires it
+  if (awaitingConfirmation) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center px-4 py-16">
+        <div className="w-full max-w-md bg-white rounded-3xl p-8 sm:p-10 shadow-xl border border-navy/5 text-center">
+          <div className="flex justify-center mb-6">
+            <Logo size="lg" />
+          </div>
+          <div className="text-5xl mb-4">📬</div>
+          <h1 className="font-display text-2xl font-extrabold text-navy tracking-tight mb-3">
+            Check your inbox!
+          </h1>
+          <p className="text-navy-60 text-sm mb-2">
+            We sent a confirmation email to
+          </p>
+          <p className="font-bold text-navy text-sm mb-6">{email}</p>
+          <p className="text-navy-60 text-xs leading-relaxed mb-8">
+            Click the link in the email to confirm your account and complete your sign-up. Check your spam folder if you don&apos;t see it within a minute.
+          </p>
+          <Link
+            href="/login"
+            className="inline-block py-3 px-8 rounded-full bg-navy text-cream font-display text-sm font-bold uppercase tracking-wider hover:bg-blue transition-all"
+          >
+            Go to Login →
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-16">
