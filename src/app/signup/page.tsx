@@ -6,12 +6,34 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/ui/logo";
 
+const KERALA_DISTRICTS = [
+  "Thiruvananthapuram",
+  "Kollam",
+  "Pathanamthitta",
+  "Alappuzha",
+  "Kottayam",
+  "Idukki",
+  "Ernakulam",
+  "Thrissur",
+  "Palakkad",
+  "Malappuram",
+  "Kozhikode",
+  "Wayanad",
+  "Kannur",
+  "Kasaragod",
+];
+
 export default function SignupPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [gender, setGender] = useState("");
+  const [age, setAge] = useState("");
+  const [district, setDistrict] = useState("");
+  const [nativePlace, setNativePlace] = useState("");
+  const [college, setCollege] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
@@ -26,7 +48,6 @@ export default function SignupPage() {
 
     try {
       console.log("[signup] calling supabase.auth.signUp for", email);
-      // 1. Sign up user via Supabase Auth
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -49,25 +70,33 @@ export default function SignupPage() {
 
       if (data.user) {
         console.log("[signup] user created, session:", !!data.session);
-        // If a session exists the user is auto-confirmed → go straight to account.
-        // If there's no session, Supabase requires email confirmation first.
+
+        const profilePayload = {
+          id: data.user.id,
+          full_name: fullName,
+          phone: phone,
+          email: email,
+          gender: gender,
+          age: age ? parseInt(age) : null,
+          district: district,
+          native_place: nativePlace,
+          college: college,
+          updated_at: new Date().toISOString(),
+        };
+
         if (data.session) {
           console.log("[signup] auto-confirmed, upserting profile...");
-          // 2. Insert into public profiles table
-          const { error: upsertError } = await supabase.from("profiles").upsert({
-            id: data.user.id,
-            full_name: fullName,
-            phone: phone,
-            email: email,
-            updated_at: new Date().toISOString(),
-          });
+          const { error: upsertError } = await supabase
+            .from("profiles")
+            .upsert(profilePayload);
           if (upsertError) console.warn("[signup] profile upsert error:", upsertError);
 
           router.push("/account");
           router.refresh();
         } else {
           console.log("[signup] email confirmation required");
-          // Email confirmation required — show a friendly message.
+          // Save profile data to localStorage so we can upsert after email confirmation
+          localStorage.setItem("pending_profile", JSON.stringify(profilePayload));
           setAwaitingConfirmation(true);
           setLoading(false);
         }
@@ -83,7 +112,7 @@ export default function SignupPage() {
     }
   };
 
-  // Show email confirmation screen if Supabase requires it
+  // Show email confirmation screen
   if (awaitingConfirmation) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center px-4 py-16">
@@ -136,6 +165,8 @@ export default function SignupPage() {
         )}
 
         <form onSubmit={handleSignup} className="flex flex-col gap-4">
+
+          {/* Full Name */}
           <div>
             <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
               Full Name
@@ -150,6 +181,7 @@ export default function SignupPage() {
             />
           </div>
 
+          {/* Email */}
           <div>
             <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
               Email Address
@@ -164,6 +196,7 @@ export default function SignupPage() {
             />
           </div>
 
+          {/* Phone */}
           <div>
             <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
               Phone Number
@@ -178,6 +211,7 @@ export default function SignupPage() {
             />
           </div>
 
+          {/* Password */}
           <div>
             <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
               Password
@@ -193,36 +227,121 @@ export default function SignupPage() {
             />
           </div>
 
+          {/* Gender + Age row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
+                Gender
+              </label>
+              <select
+                required
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-navy/15 text-sm focus:outline-none focus:border-navy bg-white"
+              >
+                <option value="" disabled>Select</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="non-binary">Non-binary</option>
+                <option value="prefer-not-to-say">Prefer not to say</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
+                Age
+              </label>
+              <input
+                type="number"
+                required
+                min={18}
+                max={60}
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                placeholder="e.g. 22"
+                className="w-full px-4 py-3 rounded-xl border border-navy/15 text-sm focus:outline-none focus:border-navy"
+              />
+            </div>
+          </div>
+
+          {/* District */}
+          <div>
+            <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
+              District (Kerala)
+            </label>
+            <select
+              required
+              value={district}
+              onChange={(e) => setDistrict(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-navy/15 text-sm focus:outline-none focus:border-navy bg-white"
+            >
+              <option value="" disabled>Select your district</option>
+              {KERALA_DISTRICTS.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Native Place */}
+          <div>
+            <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
+              Native Place
+            </label>
+            <input
+              type="text"
+              required
+              value={nativePlace}
+              onChange={(e) => setNativePlace(e.target.value)}
+              placeholder="e.g. Thrissur, Munnar..."
+              className="w-full px-4 py-3 rounded-xl border border-navy/15 text-sm focus:outline-none focus:border-navy"
+            />
+          </div>
+
+          {/* College */}
+          <div>
+            <label className="block text-xs font-display font-bold text-navy uppercase tracking-wider mb-1.5">
+              College / Institution
+            </label>
+            <input
+              type="text"
+              required
+              value={college}
+              onChange={(e) => setCollege(e.target.value)}
+              placeholder="e.g. College of Engineering, Trivandrum"
+              className="w-full px-4 py-3 rounded-xl border border-navy/15 text-sm focus:outline-none focus:border-navy"
+            />
+          </div>
+
+          {/* Member Confirmation */}
           <div className="mt-4 flex flex-col gap-3">
             <h3 className="font-display text-sm font-bold text-navy uppercase tracking-wider mb-2">
               Member Confirmation
             </h3>
-            
+
             <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
               <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
               <span>I am 18 years or older.</span>
             </label>
-            
+
             <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
               <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
               <span>The information provided by me is accurate.</span>
             </label>
-            
+
             <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
               <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
               <span>I have read and agree to these <Link href="/terms" target="_blank" className="text-pink hover:underline">Terms & Conditions</Link>.</span>
             </label>
-            
+
             <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
               <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
               <span>I agree to follow the Community Code of Conduct.</span>
             </label>
-            
+
             <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
               <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
               <span>I understand that individual events may have additional rules and consent requirements.</span>
             </label>
-            
+
             <label className="flex items-start gap-3 cursor-pointer text-xs text-navy-80 font-body">
               <input type="checkbox" required className="mt-0.5 rounded text-navy focus:ring-0" />
               <span>I have read the <Link href="/privacy" target="_blank" className="text-pink hover:underline">Privacy Policy</Link>.</span>
